@@ -17,7 +17,7 @@ module Pipes.Group.Tutorial (
     ) where
 
 import Pipes
-import Pipes.Parse
+import Pipes.Group
 
 {- $motivation
     Dividing a stream into sub-streams is non-trivial.  To illustrate the
@@ -184,7 +184,7 @@ import Pipes.Parse
 
 > import Lens.Family
 > import Pipes
-> import Pipes.Parse
+> import Pipes.Group
 > import qualified Pipes.Prelude as P
 >
 > threeGroups :: (Monad m, Eq a) => Producer a m () -> Producer a m ()
