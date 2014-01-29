@@ -15,6 +15,7 @@ module Pipes.Group (
     takes,
     takes',
     drops,
+    maps,
 
     -- * Joiners
     concats,
@@ -32,8 +33,8 @@ module Pipes.Group (
     ) where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Free (
-    FreeF(Pure, Free), FreeT(FreeT, runFreeT), transFreeT )
+import Control.Monad.Trans.Free (FreeF(Pure, Free), FreeT(FreeT, runFreeT))
+import qualified Control.Monad.Trans.Free as F
 import Data.Functor.Constant (Constant(Constant, getConstant))
 import Pipes (Producer, yield, next)
 import Pipes.Parse (span, splitAt)
@@ -139,7 +140,7 @@ takes = go
 
     'takes'' differs from 'takes' by draining unused 'Producer's in order
     to preserve the return value.  This makes it a suitable argument for
-    'transFreeT'
+    'F.transFreeT'
 -}
 takes'
     :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
@@ -181,6 +182,16 @@ drops = go
                     ft' <- P.runEffect $ P.for f P.discard
                     runFreeT $ go (n-1) ft'
 {-# INLINABLE drops #-}
+
+{-| Transform each functor layer of a 'FreeT'
+
+    This is just a synonym for 'F.transFreeT'
+-}
+maps
+    :: (Monad m, Functor g)
+    => (forall a . f a -> g a) -> FreeT f m x -> FreeT g m x
+maps = F.transFreeT
+{-# INLINABLE maps #-}
 
 {-| Fold each 'Producer' of a 'FreeT'
 
@@ -258,8 +269,7 @@ foldsM step begin done = go
 {- $reexports
     "Control.Monad.Trans.Class" re-exports 'lift'.
 
-    "Control.Monad.Trans.Free" re-exports 'FreeF', 'FreeT', 'runFreeT', and
-    'transFreeT'.
+    "Control.Monad.Trans.Free" re-exports 'FreeF' and 'FreeT'
 
     "Pipes" re-exports 'Producer', 'yield', and 'next'.
 -}
