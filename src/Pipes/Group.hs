@@ -16,12 +16,14 @@ module Pipes.Group (
     takes',
     drops,
     maps,
+    individually,
 
     -- * Joiners
     concats,
     intercalates,
 
     -- * Folds
+    -- $folds
     folds,
     foldsM,
 
