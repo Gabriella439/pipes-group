@@ -22,10 +22,9 @@ import Pipes.Group
 {- $motivation
     Dividing a stream into sub-streams is non-trivial.  To illustrate the
     problem, consider the following task: limit a stream to the first three
-    groups of elements (a group means consecutive equal elements), without
-    loading more than one element into memory.
+    groups of elements (a group means consecutive equal elements).
 
-    The really wrong way to do it is to read each group into memory like this:
+    The wrong way to do it is to read each group into memory like this:
 
 > import Lens.Family.State.Strict (zoom)
 > import Pipes
@@ -63,7 +62,7 @@ import Pipes.Group
     Worse, this program will crash without outputting a single value if fed an
     infinitely long group of identical elements:
 
->>> runEffect $ threeGroups (each [1, 1..]) >-> P.print
+>>> runEffect $ threeGroups (each (repeat 1)) >-> P.print
 <Consumes all memory and crashes>
 
     A better approach is to just stream directly from the first three groups
@@ -103,13 +102,13 @@ import Pipes.Group
     creation logic with our group consumption logic.  This conflicts with the
     @pipes@ philosophy of decoupling streaming programs into modular components.
 
-    An even better approach would be to split our logic into three steps:
+    An more modular approach would be to split our logic into three steps:
 
     * Split our 'Producer' into groups
 
     * Take the first three groups
 
-    * Concatenate these three groups back into a 'Producer'
+    * Join these three groups back into a 'Producer'
 
     But how do we split our `Producer` into groups without loading an entire
     group into memory?  We want to avoid solutions like the following code:
@@ -132,9 +131,9 @@ import Pipes.Group
 
 {- $freeT
     Fortunately, you can group elements while still streaming individual
-    elements at a time.  The 'FreeT' type @free@ package solves this problem by
-    allowing us to build \"linked lists\" of 'Producer's.  This lets you work
-    with streams in a list-like manner.
+    elements at a time.  The 'FreeT' type from the @free@ package solves this
+    problem by allowing us to build \"linked lists\" of 'Producer's.  This lets
+    you work with streams in a list-like manner.
 
     The key idea is that:
 
@@ -143,12 +142,12 @@ import Pipes.Group
 > -- If a Producer is like a list
 > Producer a m ()            ~   [a]
 >
-> -- ... then a 'FreeT'-delimited 'Producer' is like a doubly-nested list
+> -- ... then a 'FreeT'-delimited 'Producer' is like a list of lists
 > FreeT (Producer a m) m ()  ~  [[a]]
 
-    Think of @FreeT (Producer a m) m ()@ as a \"list of 'Producer's\".  'FreeT'
-    nests each subsequent 'Producer' within the return value of the previous
-    'Producer' so that you cannot access the next 'Producer' until you
+    Think of @(FreeT (Producer a m) m ())@ as a \"list of 'Producer's\".
+    'FreeT' nests each subsequent 'Producer' within the return value of the
+    previous 'Producer' so that you cannot access the next 'Producer' until you
     completely drain the current 'Producer'.  However, you rarely need to work
     with 'FreeT' directly.  Instead, you can structure most things using
     \"splitters\", \"transformations\" and \"joiners\":
@@ -173,7 +172,7 @@ import Pipes.Group
 
 > takes 3 :: Monad m => FreeT (Producer a m) m () -> FreeT (Producer a m) m ()
 
-    An example joiner is 'concats', which collapses a 'FreeT' of 'Producer's
+    An example joiner is @concats@, which collapses a 'FreeT' of 'Producer's
     back down into a single 'Producer':
 
 > concats :: Monad m => FreeT (Producer a m) m x -> Producer a m x
@@ -202,8 +201,10 @@ import Pipes.Group
 1
 2<Enter>
 2
-3<Enter>
-3
+2<Enter>
+2
+2<Enter>
+2
 3<Enter>
 3
 4<Enter>
@@ -215,10 +216,42 @@ import Pipes.Group
     joining for us:
 
 >>> runEffect $ over groups (takes 3) P.stdinLn >-> P.stdoutLn
+<Exact same behavior>
 
-    This gives the exact same behavior because 'over' takes care of calling the
-    splitter before applying the transformation, then calling the joiner
+    This behaves the same because 'over' takes care of calling the splitter
+    before applying the transformation, then calling the inverse joiner
     afterward.
+
+    Another useful lens is 'individually', which lets you apply transformations
+    to each 'Producer' layer of a 'FreeT'.  For example, if we wanted to
+    add an extra `"!"` line to the end of every group, we would write:
+
+>>> import Control.Applicative ((<*))
+>>> runEffect $ over (groups . individually) (<* yield "!") P.stdinLn >-> P.stdoutLn
+1<Enter>
+1
+1<Enter>
+1
+2<Enter>
+!
+2
+2<Enter>
+2
+2<Enter>
+2
+3<Enter>
+!
+3
+4<Enter>
+!
+>>>
+
+    Note that 'individually' is only compatible with the @lens@ package.  You
+    can alternatively use 'maps' if you are using @lens-family-core@:
+
+>>> runEffect $ over groups (maps (<* yield "!")) P.stdinLn >-> P.stdoutLn
+<Exact same behavior>
+
 -}
 
 {- $conclusion

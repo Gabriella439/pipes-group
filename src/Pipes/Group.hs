@@ -125,7 +125,14 @@ intercalates sep = go0
                 go1 f'
 {-# INLINABLE intercalates #-}
 
--- | @(takes n)@ only keeps the first @n@ functor layers of a 'FreeT'
+{-| @(takes n)@ only keeps the first @n@ functor layers of a 'FreeT'
+
+    You can think of this as:
+
+> takes
+>     :: (Functor f, Monad m)
+>     => Int -> FreeT (Producer a m) m () -> FreeT (Producer a m) m ()
+-}
 takes :: (Functor f, Monad m) => Int -> FreeT f m () -> FreeT f m ()
 takes = go
   where
@@ -142,11 +149,9 @@ takes = go
 {-| @(takes' n)@ only keeps the first @n@ 'Producer's of a 'FreeT'
 
     'takes'' differs from 'takes' by draining unused 'Producer's in order
-    to preserve the return value.  This makes it a suitable argument for
-    'F.transFreeT'
+    to preserve the return value.  This makes it a suitable argument for 'maps'.
 -}
-takes'
-    :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
+takes' :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
 takes' = go0
   where
     go0 n f = FreeT $
@@ -171,8 +176,7 @@ takes' = go0
     Use carefully: the peeling off is not free.   This runs the first @n@
     layers, just discarding everything they produce.
 -}
-drops
-    :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
+drops :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
 drops = go
   where
     go n ft
@@ -186,19 +190,58 @@ drops = go
                     runFreeT $ go (n-1) ft'
 {-# INLINABLE drops #-}
 
-{-| Transform each functor layer of a 'FreeT'
+{-| Transform each individual functor layer of a 'FreeT'
+
+    You can think of this as:
+
+> maps
+>     :: (forall r . Producer a m r -> Producer b m r)
+>     -> FreeT (Producer a m) m x -> FreeT (Producer b m) m x
 
     This is just a synonym for 'F.transFreeT'
 -}
 maps
     :: (Monad m, Functor g)
-    => (forall a . f a -> g a) -> FreeT f m x -> FreeT g m x
+    => (forall r . f r -> g r) -> FreeT f m x -> FreeT g m x
 maps = F.transFreeT
 {-# INLINABLE maps #-}
 
+{-| Lens to transform each individual functor layer of a 'FreeT'
+
+> over individually = maps  -- ... with a less general type
+-}
+individually
+    :: (Monad m, Functor g)
+    => Setter (FreeT f m x) (FreeT g m x) (f (FreeT f m x)) (g (FreeT f m x))
+individually nat f0 = Identity (go f0)
+  where
+    nat' = runIdentity . nat
+    go f = FreeT $ do
+        x <- runFreeT f
+        return $ case x of
+            Pure r -> Pure r
+            Free w -> Free (fmap go (nat' w))
+{-# INLINABLE individually #-}
+
+{- $folds
+    These folds are designed to be compatible with the @foldl@ library.  See
+    the 'Control.Foldl.purely' and 'Control.Foldl.impurely' functions from that
+    library for more details.
+
+    For example, to count the number of 'Producer' layers in a 'FreeT', you can
+    write:
+
+> import Control.Applicative (pure)
+> import qualified Control.Foldl as L
+> import Pipes.Group
+> import qualified Pipes.Prelude as P
+>
+> count :: Monad m => FreeT (Producer a m) m () -> m Int
+> count = P.sum . L.purely folds (pure 1)
+-}
 {-| Fold each 'Producer' of a 'FreeT'
 
-> Control.Foldl.purely folds
+> purely folds
 >     :: Monad m => Fold a b -> FreeT (Producer a m) m r -> Producer b m r
 -}
 folds
@@ -232,7 +275,7 @@ folds step begin done = go
 
 {-| Fold each 'Producer' of a 'FreeT', monadically
 
-> Control.Foldl.impurely foldsM
+> impurely foldsM
 >     :: Monad m => FoldM a b -> FreeT (Producer a m) m r -> Producer b m r
 -}
 foldsM
