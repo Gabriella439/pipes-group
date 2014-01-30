@@ -36,31 +36,34 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Free (FreeF(Pure, Free), FreeT(FreeT, runFreeT))
 import qualified Control.Monad.Trans.Free as F
 import Data.Functor.Constant (Constant(Constant, getConstant))
+import Data.Functor.Identity (Identity(Identity, runIdentity))
 import Pipes (Producer, yield, next)
 import Pipes.Parse (span, splitAt)
 import qualified Pipes as P
 
 import Prelude hiding (span, splitAt)
 
-type Lens' a b = forall f . (Functor f) => (b -> f b) -> (a -> f a)
+type Lens' a b = forall f . Functor f => (b -> f b) -> (a -> f a)
+type Setter a' a b' b = (b' -> Identity b) -> (a' -> Identity a)
 
 (^.) :: a -> ((b -> Constant b b) -> (a -> Constant b a)) -> b
 a ^. lens = getConstant (lens Constant a)
 
-{-| 'groupsBy' is an improper lens from a 'Producer' to a 'FreeT' of 'Producer's
-    grouped using the given equality predicate
+{-| 'groupsBy' splits a 'Producer' into a 'FreeT' of 'Producer's grouped using
+    the given equality predicate
 -}
 groupsBy
     :: Monad m
     => (a -> a -> Bool) -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
-groupsBy equals k p0 = fmap concats (k (to p0))
+groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
   where
---  to :: Monad m => Producer a m r -> FreeT (Producer a m) m r
-    to p = FreeT $ do
+--  _groupsBy :: Monad m => Producer a m r -> FreeT (Producer a m) m r
+    _groupsBy p = FreeT $ do
         x <- next p
         return $ case x of
             Left   r      -> Pure r
-            Right (a, p') -> Free $ fmap to ((yield a >> p')^.span (equals a))
+            Right (a, p') -> Free $
+                fmap _groupsBy ((yield a >> p')^.span (equals a))
 {-# INLINABLE groupsBy #-}
 
 -- | Like 'groupsBy', where the equality predicate is ('==')
@@ -68,21 +71,21 @@ groups :: (Monad m, Eq a) => Lens' (Producer a m x) (FreeT (Producer a m) m x)
 groups = groupsBy (==)
 {-# INLINABLE groups #-}
 
-{-| 'chunksOf' is an improper lens from a 'Producer' to a 'FreeT' of 'Producer's
-    of fixed length
+{-| 'chunksOf' is an splits a 'Producer' into a 'FreeT' of 'Producer's of fixed
+    length
 -}
 chunksOf
     :: Monad m => Int -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
-chunksOf n0 k p0 = fmap concats (k (to p0))
+chunksOf n0 k p0 = fmap concats (k (_chunksOf p0))
   where
---  to :: Monad m => Producer a m x -> FreeT (Producer a m) m x
-    to p = FreeT $ do
+--  _chunksOf :: Monad m => Producer a m x -> FreeT (Producer a m) m x
+    _chunksOf p = FreeT $ do
         x <- next p
         return $ case x of
             Left   r      -> Pure r
             Right (a, p') -> Free $ do
                 p'' <- (yield a >> p')^.splitAt n0
-                return (to p'')
+                return (_chunksOf p'')
 {-# INLINABLE chunksOf #-}
 
 -- | Join a 'FreeT'-delimited stream of 'Producer's into a single 'Producer'
