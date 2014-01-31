@@ -85,9 +85,7 @@ chunksOf n0 k p0 = fmap concats (k (_chunksOf p0))
         x <- next p
         return $ case x of
             Left   r      -> Pure r
-            Right (a, p') -> Free $ do
-                p'' <- (yield a >> p')^.splitAt n0
-                return (_chunksOf p'')
+            Right (a, p') -> Free $ fmap _chunksOf ((yield a >> p')^.splitAt n0)
 {-# INLINABLE chunksOf #-}
 
 -- | Join a 'FreeT'-delimited stream of 'Producer's into a single 'Producer'
