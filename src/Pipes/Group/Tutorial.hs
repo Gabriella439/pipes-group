@@ -12,6 +12,9 @@ module Pipes.Group.Tutorial (
     -- * FreeT
     -- $freeT
 
+    -- * How FreeT Works
+    -- $advanced
+
     -- * Conclusion
     -- $conclusion
     ) where
@@ -110,7 +113,7 @@ import Pipes.Group
 
     * Join these three groups back into a 'Producer'
 
-    But how do we split our `Producer` into groups without loading an entire
+    But how do we split our 'Producer' into groups without loading an entire
     group into memory?  We want to avoid solutions like the following code:
 
 > import Control.Monad (when, liftM2)
@@ -224,7 +227,7 @@ import Pipes.Group
 
     Another useful lens is 'individually', which lets you apply transformations
     to each 'Producer' layer of a 'FreeT'.  For example, if we wanted to
-    add an extra `"!"` line to the end of every group, we would write:
+    add an extra @"!"@ line to the end of every group, we would write:
 
 >>> import Control.Applicative ((<*))
 >>> runEffect $ over (groups . individually) (<* yield "!") P.stdinLn >-> P.stdoutLn
@@ -254,14 +257,91 @@ import Pipes.Group
 
 -}
 
+{- $advanced
+    You don't necessarily have to restrict yourself to predefined 'FreeT'
+    functions.  You can also manually build or recurse over 'FreeT's of
+    'Producer's.
+
+    For example, here is how 'concats' is implemented, which collapses all the
+    'Producer's within a 'FreeT' into a single 'Producer':
+
+> concats :: Monad m => FreeT (Producer a m) m x -> Producer a m x
+> concats = go
+>   where
+>     go f = do
+>         x <- lift (runFreeT f)  -- Match against the "head" of the "list"
+>         case x of
+>             Pure r -> return r  -- The "list" is empty
+>             Free p -> do        -- The "list" is non-empty
+>                 f' <- p         -- The return value of the 'Producer' is
+>                 go f'           --     the "tail" of the "list"
+
+    Many patterns for 'FreeT's have equivalent analogs for lists.  'runFreeT'
+    behaves like pattern matching on the list, except that you have to bind the
+    result.  'Pure' is analogous to @[]@ and 'Free' is analogous to (':').
+
+    When you receive a 'Free' constructor that means you have a 'Producer' whose
+    return value is the rest of the list (i.e. another 'FreeT').  You cannot
+    access the rest of the list without running the 'Producer' to completion to
+    retrieve this return value.  The above example just runs the entire
+    'Producer' and binds the remainder of the list to @f'@ and then recurses on
+    that value.
+
+    You can also build 'FreeT's in a manner similar to lists.  For example, the
+    'chunksOf' lens uses the following splitter function internally:
+
+> _chunksOf :: Monad m => Producer a m x -> FreeT (Producer a m) m x
+> _chunksOf p = FreeT $ do
+>     x <- next p                     -- Pattern match on the 'Producer'
+>     return $ case x of
+>         Left   r      -> Pure r     -- Build an empty "list"
+>         Right (a, p') -> Free $ do  -- Build a non-empty "list"
+>             p'' <- (yield a >> p')^.splitAt n0  -- Emit the "head"
+>             return (_chunksOf p'')              -- Return the "tail"
+
+    'Pure' signifies an empty 'FreeT' (one with no 'Producer' layers), just like
+    @[]@ signifies an empty list (one with no elements).  We return 'Pure'
+    whenever we cannot emit any more 'Producer's.
+
+    'Free' indicates that we wish to emit a 'Producer' followed by another
+    \"list\".  The 'Producer' we run directly within the body of the 'FreeT'.
+    However, we store the remainder of the \"list\" within the return value of
+    the 'Producer'.  This is where @_chunksOf@ recurses to build the rest of the
+    \"list\".
+
+    To gain a better understanding for how 'FreeT' works, consult the definition
+    of the type, which you can find in "Control.Monad.Trans.Free":
+
+> newtype FreeT f m a = FreeT { runFreeT :: m (FreeF f a (FreeT f m a)) }
+>
+> data FreeF f a b = Pure a | Free (f b)
+
+    ... and just replace all occurences of @f@ with @(Producer e m)@:
+
+> -- This is pseudocode
+>
+> newtype FreeT' m a = FreeT { runFreeT :: m (FreeF' a (FreeT' m a)) }
+>
+> data FreeF' a b = Pure a | Free (Producer e m b)
+
+    ... which you can further think of as:
+
+> -- More pseudocode
+>
+> newtype FreeT' m a =
+>     FreeT { runFreeT :: m (Pure a | Producer e m (FreeT' m a)) }
+
+    In other words, 'runFreeT' unwraps a 'FreeT' to produce an action in the
+    base monad which either finishes with a value of type @a@ or continues with
+    a 'Producer' which returns a new 'FreeT'.  Vice versa, if you want to build
+    a 'FreeT', you must create an action in the base monad which returns either
+    a 'Pure' or a 'Producer' wrapping another 'FreeT'.
+-}
+
 {- $conclusion
     This library is very small since it only contains element-agnostic grouping
     utilities.  Downstream libraries that provide richer grouping utilities
     include @pipes-bytestring@ and @pipes-text@.
-
-    If you want to learn how to define your own 'FreeT' splitters, joiners, or
-    lenses, you can study existing functions such as 'groupsBy' to learn how to
-    use 'FreeT' to introduce boundaries in a stream of 'Producer's.
 
     To learn more about @pipes-group@, ask questions, or follow development, you
     can subscribe to the @haskell-pipes@ mailing list at:
