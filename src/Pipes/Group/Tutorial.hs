@@ -278,13 +278,13 @@ import Pipes.Group
 
     Many patterns for 'FreeT's have equivalent analogs for lists.  'runFreeT'
     behaves like pattern matching on the list, except that you have to bind the
-    result.  'Pure' is analogous to @[]@ and 'Free' is analogous to (':').
+    result.  'Pure' is analogous to @[]@ and 'Free' is analogous to @(:)@.
 
     When you receive a 'Free' constructor that means you have a 'Producer' whose
     return value is the rest of the list (i.e. another 'FreeT').  You cannot
     access the rest of the list without running the 'Producer' to completion to
     retrieve this return value.  The above example just runs the entire
-    'Producer' and binds the remainder of the list to @f'@ and then recurses on
+    'Producer', binds the remainder of the list to @f'@ and then recurses on
     that value.
 
     You can also build 'FreeT's in a manner similar to lists.  For example, the
@@ -304,7 +304,7 @@ import Pipes.Group
     whenever we cannot emit any more 'Producer's.
 
     'Free' indicates that we wish to emit a 'Producer' followed by another
-    \"list\".  The 'Producer' we run directly within the body of the 'FreeT'.
+    \"list\".  The 'Producer' we run directly within the body of the 'Free'.
     However, we store the remainder of the \"list\" within the return value of
     the 'Producer'.  This is where @_chunksOf@ recurses to build the rest of the
     \"list\".
