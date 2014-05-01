@@ -45,7 +45,7 @@ import qualified Pipes as P
 
 import Prelude hiding (span, splitAt)
 
-type Lens' a b = forall f . Functor f => (b -> f b) -> (a -> f a)
+type Lens a' a b' b = forall f . Functor f => (b' -> f b) -> (a' -> f a)
 type Setter a' a b' b = (b' -> Identity b) -> (a' -> Identity a)
 
 (^.) :: a -> ((b -> Constant b b) -> (a -> Constant b a)) -> b
@@ -53,10 +53,16 @@ a ^. lens = getConstant (lens Constant a)
 
 {-| 'groupsBy' splits a 'Producer' into a 'FreeT' of 'Producer's grouped using
     the given equality predicate
+
+    You can think of this as:
+
+> groupsBy
+>     :: Monad m
+>     => (a -> a -> Bool) -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
 groupsBy
     :: Monad m
-    => (a -> a -> Bool) -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
+    => (a' -> a' -> Bool) -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
 groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
   where
 --  _groupsBy :: Monad m => Producer a m r -> FreeT (Producer a m) m r
@@ -68,16 +74,27 @@ groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
                 fmap _groupsBy ((yield a >> p')^.span (equals a))
 {-# INLINABLE groupsBy #-}
 
--- | Like 'groupsBy', where the equality predicate is ('==')
-groups :: (Monad m, Eq a) => Lens' (Producer a m x) (FreeT (Producer a m) m x)
+{-| Like 'groupsBy', where the equality predicate is ('==')
+
+    You can think of this as:
+
+> groups
+>     :: (Monad m, Eq a) => Lens' (Producer a m x) (FreeT (Producer a m) m x)
+-}
+groups :: (Monad m, Eq a') => Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
 groups = groupsBy (==)
 {-# INLINABLE groups #-}
 
 {-| 'chunksOf' is an splits a 'Producer' into a 'FreeT' of 'Producer's of fixed
     length
+
+    You can think of this as:
+
+> chunksOf
+>     :: Monad m => Int -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
 chunksOf
-    :: Monad m => Int -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
+    :: Monad m => Int -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
 chunksOf n0 k p0 = fmap concats (k (_chunksOf p0))
   where
 --  _chunksOf :: Monad m => Producer a m x -> FreeT (Producer a m) m x
