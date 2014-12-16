@@ -54,6 +54,9 @@ a ^. lens = getConstant (lens Constant a)
 {-| 'groupsBy' splits a 'Producer' into a 'FreeT' of 'Producer's grouped using
     the given equality predicate
 
+>>> P.toList . intercalates (P.yield '|') . view (groupsBy (==)) $ P.each "12233345"
+"1|22|333|4|5"
+
     You can think of this as:
 
 > groupsBy
@@ -62,7 +65,7 @@ a ^. lens = getConstant (lens Constant a)
 -}
 groupsBy
     :: Monad m
-    => (a' -> a' -> Bool) -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
+    => (a' -> a' -> Bool) -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
 groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
   where
 --  _groupsBy :: Monad m => Producer a m r -> FreeT (Producer a m) m r
@@ -76,17 +79,23 @@ groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
 
 {-| Like 'groupsBy', where the equality predicate is ('==')
 
+>>> P.toList . intercalates (P.yield '|') . view groups $ P.each "12233345"
+"1|22|333|4|5"
+
     You can think of this as:
 
 > groups
 >     :: (Monad m, Eq a) => Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
-groups :: (Monad m, Eq a') => Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
+groups :: (Monad m, Eq a') => Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
 groups = groupsBy (==)
 {-# INLINABLE groups #-}
 
 {-| 'chunksOf' is an splits a 'Producer' into a 'FreeT' of 'Producer's of fixed
     length
+
+>>> P.toList . intercalates (P.yield '|') . view (chunksOf 3) $ P.each "12233345"
+"122|333|45"
 
     You can think of this as:
 
@@ -94,7 +103,7 @@ groups = groupsBy (==)
 >     :: Monad m => Int -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
 chunksOf
-    :: Monad m => Int -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
+    :: Monad m => Int -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
 chunksOf n0 k p0 = fmap concats (k (_chunksOf p0))
   where
 --  _chunksOf :: Monad m => Producer a m x -> FreeT (Producer a m) m x
@@ -144,6 +153,9 @@ intercalates sep = go0
 
 {-| @(takes n)@ only keeps the first @n@ functor layers of a 'FreeT'
 
+>>> P.toList . intercalates (P.yield '|') . takes 3 . view groups $ P.each "12233345"
+"1|22|333"
+
     You can think of this as:
 
 > takes
@@ -190,7 +202,10 @@ takes' = go0
 
 {-| @(drops n)@ peels off the first @n@ 'Producer' layers of a 'FreeT'
 
-    Use carefully: the peeling off is not free.   This runs the first @n@
+>>> P.toList . intercalates (P.yield '|') . drops 3 . view groups $ P.each "12233345"
+"4|5"
+
+    __Use carefully__: the peeling off is not free.   This runs the first @n@
     layers, just discarding everything they produce.
 -}
 drops :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
