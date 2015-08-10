@@ -343,7 +343,7 @@ foldsM step begin done = go
             Right (a, p') -> do
                 x' <- step x a
                 foldM p' $! x'
-
+{-# INLINABLE foldsM #-}
 {- $reexports
     "Control.Monad.Trans.Class" re-exports 'lift'.
 
