@@ -368,9 +368,9 @@ folds step begin done = go
         case x of
             Pure r -> return r
             Free p -> do
-	        (f', b) <- lift (fold p begin)
-	        yield b
-	        go f'
+                (f', b) <- lift (fold p begin)
+                yield b
+                go f'
 
     fold p x = do
         y <- next p
@@ -404,7 +404,7 @@ foldsM step begin done = go
             Free p -> do
                 (f', b) <- lift $ do
                     x <- begin
-		    foldM p x
+                    foldM p x
                 yield b
                 go f'
 
