@@ -316,7 +316,7 @@ import Pipes.Group
 >
 > data FreeF f a b = Pure a | Free (f b)
 
-    ... and just replace all occurences of @f@ with @(Producer e m)@:
+    ... and just replace all occurrences of @f@ with @(Producer e m)@:
 
 > -- This is pseudocode
 >
