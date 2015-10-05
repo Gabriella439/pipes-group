@@ -8,6 +8,7 @@
 module Pipes.Group (
     -- * Lenses
     groupsBy,
+    groupsBy',
     groups,
     chunksOf,
 
@@ -54,6 +55,12 @@ a ^. lens = getConstant (lens Constant a)
 {-| 'groupsBy' splits a 'Producer' into a 'FreeT' of 'Producer's grouped using
     the given equality predicate
 
+>>> import Lens.Family (view)
+>>> import Pipes (yield, each)
+>>> import Pipes.Prelude (toList)
+>>> (toList . intercalates (yield '|') . view (groupsBy (==))) (each "12233345")
+"1|22|333|4|5"
+
     You can think of this as:
 
 > groupsBy
@@ -62,7 +69,8 @@ a ^. lens = getConstant (lens Constant a)
 -}
 groupsBy
     :: Monad m
-    => (a' -> a' -> Bool) -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
+    => (a' -> a' -> Bool)
+    -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
 groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
   where
 --  _groupsBy :: Monad m => Producer a m r -> FreeT (Producer a m) m r
@@ -71,22 +79,91 @@ groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
         return $ case x of
             Left   r      -> Pure r
             Right (a, p') -> Free $
-                fmap _groupsBy ((yield a >> p')^.span (equals a))
+                fmap _groupsBy (yield a >> (p' ^. span (equals a)))
 {-# INLINABLE groupsBy #-}
 
+{-| `groupsBy'` splits a 'Producer' into a 'FreeT' of 'Producer's grouped using
+    the given equality predicate
+
+    This differs from `groupsBy` by comparing successive elements for equality
+    instead of comparing each element to the first member of the group
+
+>>> import Lens.Family (view)
+>>> import Pipes (yield, each)
+>>> import Pipes.Prelude (toList)
+>>> let cmp c1 c2 = succ c1 == c2
+>>> (toList . intercalates (yield '|') . view (groupsBy' cmp)) (each "12233345")
+"12|23|3|345"
+>>> (toList . intercalates (yield '|') . view (groupsBy  cmp)) (each "12233345")
+"122|3|3|34|5"
+
+    You can think of this as:
+
+> groupsBy'
+>     :: Monad m
+>     => (a -> a -> Bool)
+>     -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
+-}
+groupsBy'
+    :: Monad m
+    => (a' -> a' -> Bool) -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
+groupsBy' equals k p0 = fmap concats (k (_groupsBy p0))
+  where
+--  _groupsBy :: Monad m => Producer a m r -> FreeT (Producer a m) m r
+    _groupsBy p = FreeT $ do
+        x <- next p
+        return $ case x of
+            Left   r      -> Pure r
+            Right (a, p') -> Free (fmap _groupsBy (loop0 (yield a >> p')))
+
+--  loop0
+--      :: Monad m
+--      => Producer a m r
+--      -> Producer a m (Producer a m r)
+    loop0 p1 = do
+        x <- lift (next p1)
+        case x of
+            Left   r      -> return (return r)
+            Right (a2, p2) -> do
+                yield a2
+                let loop1 a p = do
+                        y <- lift (next p)
+                        case y of
+                            Left   r      -> return (return r)
+                            Right (a', p') ->
+                                if equals a a'
+                                then do
+                                    yield a'
+                                    loop1 a' p'
+                                else return (yield a' >> p')
+                loop1 a2 p2
+{-# INLINABLE groupsBy' #-}
+
 {-| Like 'groupsBy', where the equality predicate is ('==')
+
+>>> import Lens.Family (view)
+>>> import Pipes (yield, each)
+>>> import Pipes.Prelude (toList)
+>>> (toList . intercalates (yield '|') . view groups) (each "12233345")
+"1|22|333|4|5"
 
     You can think of this as:
 
 > groups
 >     :: (Monad m, Eq a) => Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
-groups :: (Monad m, Eq a') => Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
+groups :: (Monad m, Eq a') => Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
 groups = groupsBy (==)
 {-# INLINABLE groups #-}
 
 {-| 'chunksOf' is an splits a 'Producer' into a 'FreeT' of 'Producer's of fixed
     length
+
+>>> import Lens.Family (view)
+>>> import Pipes (yield, each)
+>>> import Pipes.Prelude (toList)
+>>> (toList . intercalates (yield '|') . view (chunksOf 3)) (each "12233345")
+"122|333|45"
 
     You can think of this as:
 
@@ -94,7 +171,7 @@ groups = groupsBy (==)
 >     :: Monad m => Int -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
 chunksOf
-    :: Monad m => Int -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x) 
+    :: Monad m => Int -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
 chunksOf n0 k p0 = fmap concats (k (_chunksOf p0))
   where
 --  _chunksOf :: Monad m => Producer a m x -> FreeT (Producer a m) m x
@@ -144,6 +221,12 @@ intercalates sep = go0
 
 {-| @(takes n)@ only keeps the first @n@ functor layers of a 'FreeT'
 
+>>> import Lens.Family (view)
+>>> import Pipes (yield, each)
+>>> import Pipes.Prelude (toList)
+>>> (toList . intercalates (yield '|') . takes 3 . view groups) (each "12233345")
+"1|22|333"
+
     You can think of this as:
 
 > takes
@@ -190,7 +273,13 @@ takes' = go0
 
 {-| @(drops n)@ peels off the first @n@ 'Producer' layers of a 'FreeT'
 
-    Use carefully: the peeling off is not free.   This runs the first @n@
+>>> import Lens.Family (view)
+>>> import Pipes (yield, each)
+>>> import Pipes.Prelude (toList)
+>>> (toList . intercalates (yield '|') . drops 3 . view groups) (each "12233345")
+"4|5"
+
+    __Use carefully__: the peeling off is not free.   This runs the first @n@
     layers, just discarding everything they produce.
 -}
 drops :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
@@ -279,9 +368,9 @@ folds step begin done = go
         case x of
             Pure r -> return r
             Free p -> do
-	        (f', b) <- lift (fold p begin)
-	        yield b
-	        go f'
+                (f', b) <- lift (fold p begin)
+                yield b
+                go f'
 
     fold p x = do
         y <- next p
@@ -315,7 +404,7 @@ foldsM step begin done = go
             Free p -> do
                 (f', b) <- lift $ do
                     x <- begin
-		    foldM p x
+                    foldM p x
                 yield b
                 go f'
 
@@ -328,7 +417,7 @@ foldsM step begin done = go
             Right (a, p') -> do
                 x' <- step x a
                 foldM p' $! x'
-
+{-# INLINABLE foldsM #-}
 {- $reexports
     "Control.Monad.Trans.Class" re-exports 'lift'.
 
