@@ -1,15 +1,27 @@
-{-| Element-agnostic grouping utilities for @pipes@
+{-|
 
-    See "Pipes.Group.Tutorial" for an extended tutorial
+Element-agnostic grouping utilities for @pipes@
+
+See "Pipes.Group.Tutorial" for an extended tutorial
+
+Some type signatures below refer to the aliases below, which are not used in
+this library, but are included to simplify the documentation.
+
+@
+type Groups         a m x = 'FreeT' ('Producer' a m) m x
+type Splitter       a m x = 'Producer' a m x -> Groups a m x
+type Transformation a m x = Groups a m x -> Groups a m x
+type Joiner         a m x = Groups a m x -> 'Producer' a m x
+@
 -}
 
 {-# LANGUAGE RankNTypes #-}
 
 module Pipes.Group (
     -- * Lenses
+    groups,
     groupsBy,
     groupsBy',
-    groups,
     chunksOf,
 
     -- * Transformations
@@ -55,17 +67,18 @@ a ^. lens = getConstant (lens Constant a)
 {-| 'groupsBy' splits a 'Producer' into a 'FreeT' of 'Producer's grouped using
     the given equality predicate
 
+@
+      groupsBy p  :: Monad m => Lens' ('Producer' a m x) (Groups a m x)
+view (groupsBy p) :: Monad m => Splitter a m x
+set  (groupsBy p) :: Monad m => Groups a m x -> 'Producer' a m x -> 'Producer' a m x
+over (groupsBy p) :: Monad m => Transformation a m x -> 'Producer' a m x -> 'Producer' a m x
+@
+
 >>> import Lens.Family (view)
 >>> import Pipes (yield, each)
 >>> import Pipes.Prelude (toList)
 >>> (toList . intercalates (yield '|') . view (groupsBy (==))) (each "12233345")
 "1|22|333|4|5"
-
-    You can think of this as:
-
-> groupsBy
->     :: Monad m
->     => (a -> a -> Bool) -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
 groupsBy
     :: Monad m
@@ -97,12 +110,12 @@ groupsBy equals k p0 = fmap concats (k (_groupsBy p0))
 >>> (toList . intercalates (yield '|') . view (groupsBy  cmp)) (each "12233345")
 "122|3|3|34|5"
 
-    You can think of this as:
-
-> groupsBy'
->     :: Monad m
->     => (a -> a -> Bool)
->     -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
+@
+      groupsBy' p  :: Monad m => Lens' ('Producer' a m x) (Groups a m x)
+view (groupsBy' p) :: Monad m => Splitter a m x
+set  (groupsBy' p) :: Monad m => Groups a m x -> 'Producer' a m x -> 'Producer' a m x
+over (groupsBy' p) :: Monad m => Transformation a m x -> 'Producer' a m x -> 'Producer' a m x
+@
 -}
 groupsBy'
     :: Monad m
@@ -141,16 +154,18 @@ groupsBy' equals k p0 = fmap concats (k (_groupsBy p0))
 
 {-| Like 'groupsBy', where the equality predicate is ('==')
 
+@
+     groups :: Monad m => Lens' ('Producer' a m x) (Groups a m x)
+view groups :: Monad m => Splitter a m x
+set  groups :: Monad m => Groups a m x -> 'Producer' a m x -> 'Producer' a m x
+over groups :: Monad m => Transformation a m x -> 'Producer' a m x -> 'Producer' a m x
+@
+
 >>> import Lens.Family (view)
 >>> import Pipes (yield, each)
 >>> import Pipes.Prelude (toList)
 >>> (toList . intercalates (yield '|') . view groups) (each "12233345")
 "1|22|333|4|5"
-
-    You can think of this as:
-
-> groups
->     :: (Monad m, Eq a) => Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
 groups :: (Monad m, Eq a') => Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
 groups = groupsBy (==)
@@ -159,16 +174,18 @@ groups = groupsBy (==)
 {-| 'chunksOf' is an splits a 'Producer' into a 'FreeT' of 'Producer's of fixed
     length
 
+@
+      chunksOf n  :: Monad m => Lens' ('Producer' a m x) (Groups a m x)
+view (chunksOf n) :: Monad m => Splitter a m x
+set  (chunksOf n) :: Monad m => Groups a m x -> 'Producer' a m x -> 'Producer' a m x
+over (chunksOf n) :: Monad m => Transformation a m x -> 'Producer' a m x -> 'Producer' a m x
+@
+
 >>> import Lens.Family (view)
 >>> import Pipes (yield, each)
 >>> import Pipes.Prelude (toList)
 >>> (toList . intercalates (yield '|') . view (chunksOf 3)) (each "12233345")
 "122|333|45"
-
-    You can think of this as:
-
-> chunksOf
->     :: Monad m => Int -> Lens' (Producer a m x) (FreeT (Producer a m) m x)
 -}
 chunksOf
     :: Monad m => Int -> Lens (Producer a' m x) (Producer a m x) (FreeT (Producer a' m) m x) (FreeT (Producer a m) m x)
@@ -183,6 +200,10 @@ chunksOf n0 k p0 = fmap concats (k (_chunksOf p0))
 {-# INLINABLE chunksOf #-}
 
 -- | Join a 'FreeT'-delimited stream of 'Producer's into a single 'Producer'
+--
+-- @
+-- concats :: Monad m => Joiner a m x
+-- @
 concats :: Monad m => FreeT (Producer a m) m x -> Producer a m x
 concats = go
   where
@@ -197,6 +218,10 @@ concats = go
 
 {-| Join a 'FreeT'-delimited stream of 'Producer's into a single 'Producer' by
     intercalating a 'Producer' in between them
+
+@
+intercalates :: Monad m => 'Producer' a m () -> Joiner a m x
+@
 -}
 intercalates
     :: Monad m => Producer a m () -> FreeT (Producer a m) m x -> Producer a m x
@@ -221,17 +246,15 @@ intercalates sep = go0
 
 {-| @(takes n)@ only keeps the first @n@ functor layers of a 'FreeT'
 
+@
+takes :: Monad m => Int -> Groups a m () -> Groups a m ()
+@
+
 >>> import Lens.Family (view)
 >>> import Pipes (yield, each)
 >>> import Pipes.Prelude (toList)
 >>> (toList . intercalates (yield '|') . takes 3 . view groups) (each "12233345")
 "1|22|333"
-
-    You can think of this as:
-
-> takes
->     :: (Functor f, Monad m)
->     => Int -> FreeT (Producer a m) m () -> FreeT (Producer a m) m ()
 -}
 takes :: (Functor f, Monad m) => Int -> FreeT f m () -> FreeT f m ()
 takes = go
@@ -250,6 +273,10 @@ takes = go
 
     'takes'' differs from 'takes' by draining unused 'Producer's in order
     to preserve the return value.  This makes it a suitable argument for 'maps'.
+
+@
+takes' :: Monad m => Int -> Transformation a m x
+@
 -}
 takes' :: Monad m => Int -> FreeT (Producer a m) m x -> FreeT (Producer a m) m x
 takes' = go0
@@ -272,6 +299,10 @@ takes' = go0
 {-# INLINABLE takes' #-}
 
 {-| @(drops n)@ peels off the first @n@ 'Producer' layers of a 'FreeT'
+
+@
+drops :: Monad m => Int -> Transformation a m x
+@
 
 >>> import Lens.Family (view)
 >>> import Pipes (yield, each)
@@ -312,9 +343,15 @@ maps
 maps = F.transFreeT
 {-# INLINABLE maps #-}
 
-{-| Lens to transform each individual functor layer of a 'FreeT'
+{-| Lens to transform each individual functor layer of a 'FreeT'. (@over
+    'individually'@) is equivalent to 'maps', but with a less general type.
 
-> over individually = maps  -- ... with a less general type
+@
+type Group a m x = 'Producer' a m (Groups a m x)
+
+set  individually :: Monad m => Group a m x -> Transformation a m x
+over individually :: Monad m => (Group a m x -> Group a m x) -> Transformation a m x
+@
 -}
 individually
     :: (Monad m, Functor g)
@@ -347,8 +384,9 @@ individually nat f0 = Identity (go f0)
 -}
 {-| Fold each 'Producer' of a 'FreeT'
 
-> purely folds
->     :: Monad m => Fold a b -> FreeT (Producer a m) m r -> Producer b m r
+@
+'Control.Foldl.purely' folds :: Monad m => 'Control.Foldl.Fold' a b -> Groups a m r -> 'Producer' b m r
+@
 -}
 folds
     :: Monad m
@@ -381,8 +419,9 @@ folds step begin done = go
 
 {-| Fold each 'Producer' of a 'FreeT', monadically
 
-> impurely foldsM
->     :: Monad m => FoldM a b -> FreeT (Producer a m) m r -> Producer b m r
+@
+'Control.Foldl.impurely' foldsM :: Monad m => 'Control.Foldl.FoldM' a b -> Groups a m r -> 'Producer' b m r
+@
 -}
 foldsM
     :: Monad m
