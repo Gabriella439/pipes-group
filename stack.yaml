@@ -1,4 +1,1 @@
 resolver: lts-7.11
-extra-deps:
-- pipes-4.3.0
-- pipes-parse-3.0.8
