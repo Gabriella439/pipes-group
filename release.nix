@@ -1,17 +1,5 @@
 let
-  config = {
-    packageOverrides = pkgs: {
-      haskellPackages = pkgs.haskellPackages.override {
-        overrides = haskellPackagesNew: haskellPackagesOld: {
-          pipes-group = haskellPackagesNew.callPackage ./default.nix { };
-        };
-      };
-    };
-  };
-
-  pkgs =
-    import <nixpkgs> { inherit config; };
+  default = import ./default.nix;
 
 in
-  { inherit (pkgs.haskellPackages) pipes-group;
-  }
+  { inherit (default) pipes-group; }
