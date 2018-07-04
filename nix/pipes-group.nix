@@ -3,7 +3,7 @@
 }:
 mkDerivation {
   pname = "pipes-group";
-  version = "1.0.11";
+  version = "1.0.12";
   src = ./..;
   libraryHaskellDepends = [
     base free pipes pipes-parse transformers
