@@ -290,14 +290,14 @@ import Pipes.Group
     You can also build 'FreeT's in a manner similar to lists.  For example, the
     'chunksOf' lens uses the following splitter function internally:
 
-> _chunksOf :: Monad m => Producer a m x -> FreeT (Producer a m) m x
-> _chunksOf p = FreeT $ do
+> _chunksOf :: Monad m => Int -> Producer a m x -> FreeT (Producer a m) m x
+> _chunksOf n p = FreeT $ do
 >     x <- next p                     -- Pattern match on the 'Producer'
 >     return $ case x of
 >         Left   r      -> Pure r     -- Build an empty "list"
 >         Right (a, p') -> Free $ do  -- Build a non-empty "list"
->             p'' <- (yield a >> p')^.splitAt n0  -- Emit the "head"
->             return (_chunksOf p'')              -- Return the "tail"
+>             p'' <- (yield a >> p')^.splitAt n  -- Emit the "head"
+>             return (_chunksOf n p'')           -- Return the "tail"
 
     'Pure' signifies an empty 'FreeT' (one with no 'Producer' layers), just like
     @[]@ signifies an empty list (one with no elements).  We return 'Pure'
