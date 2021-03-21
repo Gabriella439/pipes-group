@@ -2,11 +2,9 @@ let
   fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
 
   nixpkgs = builtins.fetchTarball {
-    url    = "https://github.com/NixOS/nixpkgs/archive/3e5cf4fa63552795ed7fa6ee160de4b3b1ef5753.tar.gz";
-    sha256 = "0a60l2jrplgfrfhw40cyr73nksb2bdjl0kxgs6i7nqilxfdd3kb6";
+    url    = "https://github.com/NixOS/nixpkgs/archive/ae66c3e40486c0e88a6cefc8d275c248fc6a696c.tar.gz";
+    sha256 = "1gw4kdlkmxyil8capnagv41hqmh31hkibidjgy3bxhlljr8xgfkc";
   };
-
-  readDirectory = import ./nix/readDirectory.nix;
 
   config = {
     packageOverrides = pkgs: {
@@ -17,7 +15,9 @@ let
             };
 
           in
-            pkgs.lib.composeExtensions (readDirectory ./nix) manualOverrides;
+            pkgs.lib.composeExtensions
+              (pkgs.haskell.lib.packagesFromDirectory { directory = ./nix; })
+              manualOverrides;
       };
     };
   };
