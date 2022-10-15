@@ -7,7 +7,7 @@ License-File: LICENSE
 Copyright: 2014 Gabriella Gonzalez
 Author: Gabriella Gonzalez
 Maintainer: GenuineGabriella@gmail.com
-Bug-Reports: https://github.com/Gabriella439/Haskell-Pipes-Group-Library/issues
+Bug-Reports: https://github.com/Gabriella439/pipes-group/issues
 Synopsis: Group streams into substreams
 Description: @pipes-group@ uses @FreeT@ and lenses to group streams into
     sub-streams.  Notable features include:
@@ -22,7 +22,7 @@ Description: @pipes-group@ uses @FreeT@ and lenses to group streams into
 Category: Control, Pipes
 Source-Repository head
     Type: git
-    Location: https://github.com/Gabriella439/Haskell-Pipes-Group-Library
+    Location: https://github.com/Gabriella439/pipes-group
 
 Library
     HS-Source-Dirs: src
