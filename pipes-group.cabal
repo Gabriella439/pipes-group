@@ -32,7 +32,7 @@ Library
         free         >= 3.2     && < 5.3,
         pipes        >= 4.0     && < 4.4,
         pipes-parse  >= 3.0.0   && < 3.1,
-        transformers >= 0.2.0.0 && < 0.6
+        transformers >= 0.2.0.0 && < 0.7
     Exposed-Modules:
         Pipes.Group
         Pipes.Group.Tutorial
