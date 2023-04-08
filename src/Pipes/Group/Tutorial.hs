@@ -22,31 +22,35 @@ module Pipes.Group.Tutorial (
 import Pipes
 import Pipes.Group
 
+-- $setup
+-- >>> :set -XScopedTypeVariables
+
 {- $motivation
     Dividing a stream into sub-streams is non-trivial.  To illustrate the
     problem, consider the following task: limit a stream to the first three
     groups of elements (a group means consecutive equal elements).
 
     The wrong way to do it is to read each group into memory like this:
-
-> import Lens.Family.State.Strict (zoom)
-> import Pipes
-> import Pipes.Parse
-> import qualified Pipes.Prelude as P
-> 
-> threeGroups :: (Monad m, Eq a) => Producer a m () -> Producer a m ()
-> threeGroups p0 = loop 3 p0
->   where
->     loop 0 _ = return ()
->     loop n p = do
->         (as, p') <- lift $ runStateT (zoom group drawAll) p
->         each as
->         loop (n - 1) p'
+>>> import Lens.Family.State.Strict (zoom)
+>>> import Pipes
+>>> import Pipes.Parse
+>>> import qualified Pipes.Prelude as P
+>>>
+>>> :{
+>>> threeGroups :: (Monad m, Eq a) => Producer a m () -> Producer a m ()
+>>> threeGroups p0 = loop 3 p0
+>>>   where
+>>>     loop (0 :: Int) _ = return ()
+>>>     loop n p = do
+>>>         (as, p') <- lift $ runStateT (zoom group drawAll) p
+>>>         each as
+>>>         loop (n - 1) p'
+>>> :}
 
     The first problem is that this approach does not output any elements from
     each group until after parsing the entire group:
 
->>> runEffect $ threeGroups P.stdinLn >-> P.stdoutLn
+> runEffect $ threeGroups P.stdinLn >-> P.stdoutLn
 1<Enter>
 1<Enter>
 2<Enter>
@@ -60,33 +64,35 @@ import Pipes.Group
 2
 4<Enter>
 3
->>>
+>
 
     Worse, this program will crash without outputting a single value if fed an
     infinitely long group of identical elements:
 
->>> runEffect $ threeGroups (each (repeat 1)) >-> P.print
+> runEffect $ threeGroups (each (repeat 1)) >-> P.print
 <Consumes all memory and crashes>
 
     A better approach is to just stream directly from the first three groups
     instead of storing the groups in intermediate lists:
 
-> import Lens.Family ((^.))
-> import Pipes
-> import Pipes.Parse
-> import qualified Pipes.Prelude as P
-> 
-> threeGroups :: (Monad m, Eq a) => Producer a m () -> Producer a m ()
-> threeGroups p0 = loop 3 p0
->   where
->     loop 0 _ = return ()
->     loop n p = do
->         p' <- p ^. group
->         loop (n - 1) p'
+>>> import Lens.Family ((^.))
+>>> import Pipes
+>>> import Pipes.Parse
+>>> import qualified Pipes.Prelude as P
+>>>
+>>> :{
+>>> threeGroups :: (Monad m, Eq a) => Producer a m () -> Producer a m ()
+>>> threeGroups p0 = loop 3 p0
+>>>   where
+>>>     loop (0 :: Int) _ = return ()
+>>>     loop n p = do
+>>>         p' <- p ^. group
+>>>         loop (n - 1) p'
+>>> :}
 
     This will run in constant memory and stream values immediately:
 
->>> runEffect $ threeGroups P.stdinLn >-> P.stdoutLn
+> runEffect $ threeGroups P.stdinLn >-> P.stdoutLn
 1<Enter>
 1
 1<Enter>
@@ -116,23 +122,25 @@ import Pipes.Group
     But how do we split our 'Producer' into groups without loading an entire
     group into memory?  We want to avoid solutions like the following code:
 
-> import Control.Monad (when, liftM2)
-> import Lens.Family.State.Strict (zoom)
-> import Pipes.Parse
-> 
-> split :: (Monad m, Eq a) => Producer a m () -> Producer [a] m ()
-> split p = do
->     ((as, eof), p') <- lift (runStateT parser p)
->     yield as
->     when (not eof) (split p')
->   where
->     parser = liftM2 (,) (zoom group drawAll) isEndOfInput
+>>> import Control.Monad (when, liftM2)
+>>> import Lens.Family.State.Strict (zoom)
+>>> import Pipes.Parse
+>>>
+>>> :{
+>>> split :: (Monad m, Eq a) => Producer a m () -> Producer [a] m ()
+>>> split p = do
+>>>     ((as, eof), p') <- lift (runStateT parser p)
+>>>     yield as
+>>>     when (not eof) (split p')
+>>>   where
+>>>     parser = liftM2 (,) (zoom group drawAll) isEndOfInput
+>>> :}
 
     ... because then we're back where we started, loading entire groups into
     memory.
 -}
 
-{- $freeT
+{-  $freeT
     Fortunately, you can group elements while still streaming individual
     elements at a time.  The 'FreeT' type from the @free@ package solves this
     problem by allowing us to build \"linked lists\" of 'Producer's.  This lets
@@ -184,20 +192,22 @@ import Pipes.Group
     that transforms a 'Producer' to keep only the first three groups of
     consecutive equal elements:
 
-> import Lens.Family
-> import Pipes
-> import Pipes.Group
-> import qualified Pipes.Prelude as P
->
-> threeGroups :: (Monad m, Eq a) => Producer a m () -> Producer a m ()
-> threeGroups = concats . takes 3 . view groups
+>>> import Lens.Family
+>>> import Pipes
+>>> import Pipes.Group
+>>> import qualified Pipes.Prelude as P
+>>>
+>>> :{
+>>> threeGroups :: (Monad m, Eq a) => Producer a m () -> Producer a m ()
+>>> threeGroups = concats . takes 3 . view groups
+>>> :}
 
     Both splitting and joining preserve the streaming nature of 'Producer's and
     do not collect or buffer any values.  The transformed 'Producer' still
     outputs values immediately and does not wait for groups to complete before
     producing results.
 
->>> runEffect $ threeGroups P.stdinLn >-> P.stdoutLn
+> runEffect $ threeGroups P.stdinLn >-> P.stdoutLn
 1<Enter>
 1
 1<Enter>
@@ -211,14 +221,14 @@ import Pipes.Group
 3<Enter>
 3
 4<Enter>
->>>
+>
 
     Also, lenses simplify things even further.  The reason that 'groups' is a
     lens is because it actually combines both a splitter and joiner into a
     single package.  We can then use 'over' to handle both the splitting and
     joining for us:
 
->>> runEffect $ over groups (takes 3) P.stdinLn >-> P.stdoutLn
+> runEffect $ over groups (takes 3) P.stdinLn >-> P.stdoutLn
 <Exact same behavior>
 
     This behaves the same because 'over' takes care of calling the splitter
@@ -230,7 +240,7 @@ import Pipes.Group
     add an extra @"!"@ line to the end of every group, we would write:
 
 >>> import Control.Applicative ((<*))
->>> runEffect $ over (groups . individually) (<* yield "!") P.stdinLn >-> P.stdoutLn
+> runEffect $ over (groups . individually) (<* yield "!") P.stdinLn >-> P.stdoutLn
 1<Enter>
 1
 1<Enter>
@@ -247,12 +257,12 @@ import Pipes.Group
 3
 4<Enter>
 !
->>>
+>
 
     Note that 'individually' is only compatible with the @lens@ package.  You
     can alternatively use 'maps' if you are using @lens-family-core@:
 
->>> runEffect $ over groups (maps (<* yield "!")) P.stdinLn >-> P.stdoutLn
+> runEffect $ over groups (maps (<* yield "!")) P.stdinLn >-> P.stdoutLn
 <Exact same behavior>
 
 -}
